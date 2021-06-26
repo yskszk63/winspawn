@@ -29,6 +29,7 @@ async fn test_simple() {
     eprintln!("{:?}", rxtheir);
     eprintln!("{:?}", txtheir);
 
+    // because To suppress the occurrence of `ERROR_IO_INCOMPLETE`.
     rxtheir.read(&mut vec![]).await.unwrap();
     txtheir.write(&mut vec![]).await.unwrap();
 
@@ -38,12 +39,15 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
-    let mut prog = swap_fd(rxtheir, 3, |_| {
-        swap_fd(txtheir, 4, |_| spawn("python", ["./simple.rs"]))
+    let mut prog = swap_fd(&rxtheir, 3, |_| {
+        swap_fd(&txtheir, 4, |_| spawn("python", ["./simple.rs"]))
     })
     .unwrap();
+    drop(rxtheir);
+    drop(txtheir);
 
     txme.write_all(b"Hello").await.unwrap();
+    txme.shutdown().await.unwrap();
     drop(txme);
 
     let mut buf = vec![];
