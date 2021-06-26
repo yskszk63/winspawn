@@ -24,6 +24,8 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 
 #[tokio::test]
 async fn test_simple() {
+    pretty_env_logger::init();
+
     let (mut rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
     let (mut rxme, mut txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
     eprintln!("{:?}", rxtheir);
@@ -40,7 +42,10 @@ async fn test_simple() {
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
     let mut prog = swap_fd(&rxtheir, 3, |_| {
-        swap_fd(&txtheir, 4, |_| spawn("python", ["./simple.rs"]))
+        swap_fd(&txtheir, 4, |_| {
+            eprintln!("spawn");
+            spawn("python", ["./simple.rs"])
+        })
     })
     .unwrap();
     drop(rxtheir);
