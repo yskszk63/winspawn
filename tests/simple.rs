@@ -46,6 +46,7 @@ async fn test_simple() {
     drop(rxtheir);
     drop(txtheir);
 
+    eprintln!("write");
     txme.write_all(b"Hello").await.unwrap();
     eprintln!("wrote");
     txme.shutdown().await.unwrap();
