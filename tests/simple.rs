@@ -47,12 +47,15 @@ async fn test_simple() {
     drop(txtheir);
 
     txme.write_all(b"Hello").await.unwrap();
+    eprintln!("wrote");
     txme.shutdown().await.unwrap();
     drop(txme);
 
+    eprintln!("read");
     let mut buf = vec![];
     rxme.read_to_end(&mut buf).await.unwrap();
     assert_eq!(b"Hello".as_ref(), &buf);
+    eprintln!("OK");
 
     let exitcode = prog.wait().unwrap();
     assert_eq!(0, exitcode);
