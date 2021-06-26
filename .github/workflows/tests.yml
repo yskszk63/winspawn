@@ -28,17 +28,6 @@ jobs:
         command: fmt
         args: -- --check
 
-    - name: Annotate commit with clippy warnings
-      uses: actions-rs/clippy-check@v1
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        args: --all-features
-
-    - name: Security audit
-      uses: actions-rs/audit-check@v1
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Tests
       uses: actions-rs/cargo@v1
       with:
