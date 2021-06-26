@@ -9,6 +9,8 @@ edition = "2018"
 winspawn-macro = { version = "0.1.0", path = "winspawn-macro" }
 
 [dev-dependencies]
+tokio = { version = "1.7", features = ["macros", "rt", "io-util"] }
+tokio-anon-pipe = "0.1.0"
 
 [workspace]
 members = [
