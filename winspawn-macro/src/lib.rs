@@ -3,14 +3,19 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 
 use quote::quote;
-use syn::{ItemFn, parse_macro_input};
+use syn::{parse_macro_input, ItemFn};
 
 #[proc_macro_attribute]
 pub fn ignore_invalid_handler(_: TokenStream, item: TokenStream) -> TokenStream {
     // TODO symbol resolve rule
     let fun = parse_macro_input!(item as ItemFn);
 
-    let ItemFn { attrs, vis, sig, block } = fun;
+    let ItemFn {
+        attrs,
+        vis,
+        sig,
+        block,
+    } = fun;
     let result = quote! {
         #(#attrs)*
         #vis #sig {
