@@ -10,7 +10,7 @@ fn into_raw_handle<P>(p: P) -> HANDLE
 where
     P: std::os::windows::io::AsRawHandle,
 {
-    use std::io::windows::AsRawHandle;
+    use std::os::windows::io::AsRawHandle;
     use std::mem;
 
     let r = p.as_raw_handle();
