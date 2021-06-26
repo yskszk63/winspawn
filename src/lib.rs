@@ -20,7 +20,7 @@ use sys::_open_osfhandle;
 use sys::_set_invalid_parameter_handler as _set_thread_local_invalid_parameter_handler; // FIXME where _set_thread_local_invalid_parameter_handler?
 use sys::wchar_t;
 use sys::{_close, _dup, _dup2};
-use sys::{_wspawnv, P_NOWAIT};
+use sys::{_wspawnvp, P_NOWAIT};
 
 #[cfg(not(windows))]
 mod stub {
@@ -153,7 +153,7 @@ where
         .chain(iter::once(ptr::null()))
         .collect::<Vec<_>>();
 
-    let child = unsafe { _wspawnv(P_NOWAIT as c_int, program, args.as_ptr()) };
+    let child = unsafe { _wspawnvp(P_NOWAIT as c_int, program, args.as_ptr()) };
     if child < 0 {
         return Err(io::Error::last_os_error());
     }
