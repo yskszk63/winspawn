@@ -26,6 +26,8 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 async fn test_simple() {
     let (rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
     let (mut rxme, txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
+    eprintln!("{:?}", rxtheir);
+    eprintln!("{:?}", txtheir);
 
     let rxtheir = into_raw_handle(rxtheir);
     let txtheir = into_raw_handle(txtheir);
