@@ -102,16 +102,21 @@ where
     F: FnOnce(&FileDescriptor) -> Result<R, E>,
     E: From<io::Error>,
 {
+    eprintln!("begin swap_fd with {:?} {}.", fd, dest);
     // backup dest if exists.
     let backup = unsafe { FileDescriptor::from_raw_fd(dest) }.dup();
+    eprintln!("backup {:?}.", backup);
 
     // drop non inherit flag
+    eprintln!("dup2.");
     let newfd = fd.dup2(dest)?;
+    eprintln!("dup2 ok.");
     let result = func(&newfd);
     drop(newfd);
 
     // restore backup
     if let Ok(backup) = backup {
+        eprintln!("restore backup");
         backup.dup2(dest)?;
     }
     result
