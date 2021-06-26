@@ -10,7 +10,7 @@ where
     P: std::os::windows::io::AsRawHandle,
 {
     use std::mem;
-    use std::os::windows::io::AsRawHandle;
+    //use std::os::windows::io::AsRawHandle;
 
     let r = p.as_raw_handle();
     mem::forget(p);
@@ -24,10 +24,13 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 
 #[tokio::test]
 async fn test_simple() {
-    let (rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
-    let (mut rxme, txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
+    let (mut rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
+    let (mut rxme, mut txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
     eprintln!("{:?}", rxtheir);
     eprintln!("{:?}", txtheir);
+
+    rxtheir.read(&mut vec![]).await.unwrap();
+    txtheir.write(&mut vec![]).await.unwrap();
 
     let rxtheir = into_raw_handle(rxtheir);
     let txtheir = into_raw_handle(txtheir);
