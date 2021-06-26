@@ -134,7 +134,7 @@ impl Child {
 
 #[cfg(windows)]
 fn enc_wstr<S: AsRef<OsStr>>(s: S) -> Vec<wchar_t> {
-    s.encode_wide().chain(iter::once(0)).collect()
+    s.as_ref().encode_wide().chain(iter::once(0)).collect()
 }
 
 pub fn spawn<P, A, AS>(program: P, args: A) -> io::Result<Child>
