@@ -21,6 +21,24 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 async fn test_simple() {
     pretty_env_logger::init();
 
+    let (r, w) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
+
+    extern "C" {
+        fn _open_osfhandle(_: isize, _: std::os::raw::c_int) -> std::os::raw::c_int;
+        fn _dup(_: std::os::raw::c_int) -> std::os::raw::c_int;
+    }
+    let h = unsafe { _open_osfhandle(r.into_raw_handle() as isize, 0) };
+    if h < 0 {
+        panic!("failed to _open_osfhandle")
+    }
+    let fd = unsafe { _dup(h) };
+    if fd < 0 {
+        panic!("failed to _dup")
+    }
+
+    w.connect().await.unwrap();
+
+    /*
     let (rxtheir, txme) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
     let (rxme, txtheir) = tokio_anon_pipe::anon_pipe_we_read().unwrap();
     eprintln!("{:?}", rxtheir);
@@ -32,8 +50,8 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
-    let mut prog = swap_fd(&txtheir, 4, |_| {
-        swap_fd(&rxtheir, 3, |_| {
+    let mut prog = swap_fd(&rxtheir, 3, |_| {
+        swap_fd(&txtheir, 4, |_| {
             eprintln!("spawn");
             spawn("python", ["./test.py"])
         })
@@ -60,4 +78,5 @@ async fn test_simple() {
 
     let exitcode = prog.wait().unwrap();
     assert_eq!(0, exitcode);
+    */
 }
