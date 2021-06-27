@@ -10,7 +10,6 @@ where
     P: std::os::windows::io::AsRawHandle,
 {
     use std::mem;
-    //use std::os::windows::io::AsRawHandle;
 
     let r = p.as_raw_handle();
     mem::forget(p);
@@ -26,14 +25,10 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 async fn test_simple() {
     pretty_env_logger::init();
 
-    let (mut rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
-    let (mut rxme, mut txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
+    let (rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
+    let (mut rxme, txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
     eprintln!("{:?}", rxtheir);
     eprintln!("{:?}", txtheir);
-
-    // because To suppress the occurrence of `ERROR_IO_INCOMPLETE`.
-    rxtheir.read(&mut vec![]).await.unwrap();
-    txtheir.write(&mut vec![]).await.unwrap();
 
     let rxtheir = into_raw_handle(rxtheir);
     let txtheir = into_raw_handle(txtheir);
@@ -41,8 +36,8 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
-    let mut prog = swap_fd(&rxtheir, 3, |_| {
-        swap_fd(&txtheir, 4, |_| {
+    let mut prog = swap_fd(&txtheir, 4, |_| {
+        swap_fd(&rxtheir, 3, |_| {
             eprintln!("spawn");
             spawn("python", ["./simple.rs"])
         })
