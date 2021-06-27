@@ -3,6 +3,7 @@
 #[allow(non_snake_case)]
 #[allow(deref_nullptr)]
 #[allow(improper_ctypes)]
+#[allow(non_upper_case_globals)]
 mod sys;
 
 mod bindings {
