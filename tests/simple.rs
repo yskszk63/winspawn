@@ -42,6 +42,9 @@ async fn test_simple() {
     drop(rxtheir);
     drop(txtheir);
 
+    // poll process exit
+    let task = tokio::spawn(prog);
+
     eprintln!("write");
     txme.write_all(b"Hello").await.unwrap();
     eprintln!("wrote");
@@ -54,10 +57,6 @@ async fn test_simple() {
     assert_eq!(b"Hello".as_ref(), &buf);
     eprintln!("OK");
 
-    /*
-    prog.try_wait().unwrap();
-    let exitcode = prog.wait().unwrap();
-    */
-    let exitcode = prog.await.unwrap();
+    let exitcode = task.await.unwrap().unwrap();
     assert_eq!(0, exitcode);
 }
