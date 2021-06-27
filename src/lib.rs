@@ -172,10 +172,10 @@ where
     A: IntoIterator<Item = AS>,
     AS: AsRef<OsStr>,
 {
-    let program = enc_wstr(program.as_ref()).as_ptr();
+    let program = dbg!(enc_wstr(program.as_ref())).as_ptr();
 
     let args = args.into_iter().map(enc_wstr).collect::<Vec<_>>();
-    let args = args.iter().map(Vec::as_ptr).collect::<Vec<_>>();
+    let args = dbg!(args).iter().map(Vec::as_ptr).collect::<Vec<_>>();
 
     let args = iter::once(program)
         .chain(args)

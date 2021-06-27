@@ -28,7 +28,6 @@ jobs:
         command: fmt
         args: -- --check
 
-    - run: python -V
     - name: Tests
       uses: actions-rs/cargo@v1
       with:
