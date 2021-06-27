@@ -29,10 +29,10 @@ use sys::wchar_t;
 use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
 
-use bindings::Windows::Win32::Foundation::HANDLE as WinHandle;
+use bindings::Windows::Win32::Foundation::{HANDLE as WinHandle, INVALID_HANDLE_VALUE};
 use bindings::Windows::Win32::System::Threading::{
-    GetExitCodeProcess, RegisterWaitForSingleObject, WaitForSingleObject, WAIT_OBJECT_0,
-    WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
+    GetExitCodeProcess, RegisterWaitForSingleObject, UnregisterWaitEx, WaitForSingleObject,
+    WAIT_OBJECT_0, WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
@@ -147,17 +147,32 @@ where
 }
 
 #[derive(Debug)]
-pub struct Child(WinHandle);
+struct Waiter(WinHandle);
+
+impl Drop for Waiter {
+    fn drop(&mut self) {
+        let ret = unsafe { UnregisterWaitEx(self.0, INVALID_HANDLE_VALUE) };
+        if !ret.as_bool() {
+            log::warn!("failed to unregister wait: {}", io::Error::last_os_error());
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Child {
+    proc_handle: WinHandle,
+    waiter: Option<Waiter>,
+}
 
 impl Child {
     pub fn wait(&mut self) -> io::Result<u32> {
-        let ret = unsafe { WaitForSingleObject(self.0, INFINITE) };
+        let ret = unsafe { WaitForSingleObject(self.proc_handle, INFINITE) };
         if ret != WAIT_OBJECT_0 {
             return Err(io::Error::last_os_error());
         }
 
         let mut status = 0;
-        unsafe { GetExitCodeProcess(self.0, &mut status) }
+        unsafe { GetExitCodeProcess(self.proc_handle, &mut status) }
             .ok()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
@@ -165,14 +180,14 @@ impl Child {
     }
 
     pub fn try_wait(&mut self) -> io::Result<Option<u32>> {
-        match unsafe { WaitForSingleObject(self.0, 0) } {
+        match unsafe { WaitForSingleObject(self.proc_handle, 0) } {
             WAIT_OBJECT_0 => {}
             WAIT_TIMEOUT => return Ok(None),
             _ => return Err(io::Error::last_os_error()),
         }
 
         let mut status = 0;
-        unsafe { GetExitCodeProcess(self.0, &mut status) }
+        unsafe { GetExitCodeProcess(self.proc_handle, &mut status) }
             .ok()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
@@ -193,11 +208,11 @@ impl Future for Child {
 
             let waker = cx.waker().clone();
             let waker = Box::into_raw(Box::new(Some(waker)));
-            let wait_object = ptr::null_mut();
+            let mut wait_object = WinHandle::default();
             unsafe {
                 RegisterWaitForSingleObject(
-                    wait_object,
-                    this.0,
+                    &mut wait_object as *mut _,
+                    this.proc_handle,
                     Some(callback),
                     waker as *mut _,
                     INFINITE,
@@ -206,13 +221,15 @@ impl Future for Child {
             }
             .ok()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+            this.waiter = Some(Waiter(wait_object));
         }
     }
 }
 
 unsafe extern "system" fn callback(ptr: *mut c_void, _: u8) {
-    let complete = &mut *(ptr as *mut Option<Waker>);
-    complete.take().unwrap().wake();
+    let mut waker = Box::from_raw(ptr as *mut Option<Waker>);
+    waker.take().unwrap().wake();
 }
 
 #[cfg(windows)]
@@ -244,5 +261,8 @@ where
         return Err(io::Error::last_os_error());
     }
 
-    Ok(Child(WinHandle(child)))
+    Ok(Child {
+        proc_handle: WinHandle(child),
+        waiter: None,
+    })
 }
