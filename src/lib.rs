@@ -9,7 +9,8 @@ mod bindings {
     windows::include_bindings!();
 }
 
-use std::ffi::{OsStr, c_void};
+use std::ffi::{c_void, OsStr};
+use std::future::Future;
 use std::io;
 use std::iter;
 use std::mem;
@@ -21,7 +22,6 @@ use std::os::windows::raw::HANDLE;
 use std::pin::Pin;
 use std::ptr;
 use std::task::{Context, Poll, Waker};
-use std::future::Future;
 
 use sys::_open_osfhandle;
 use sys::_set_invalid_parameter_handler as _set_thread_local_invalid_parameter_handler; // FIXME where _set_thread_local_invalid_parameter_handler?
@@ -31,7 +31,8 @@ use sys::{_wspawnvp, P_NOWAIT};
 
 use bindings::Windows::Win32::Foundation::HANDLE as WinHandle;
 use bindings::Windows::Win32::System::Threading::{
-    GetExitCodeProcess, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT, RegisterWaitForSingleObject,WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE
+    GetExitCodeProcess, RegisterWaitForSingleObject, WaitForSingleObject, WAIT_OBJECT_0,
+    WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
@@ -202,7 +203,9 @@ impl Future for Child {
                     INFINITE,
                     WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE,
                 )
-            }.ok().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         }
     }
 }
