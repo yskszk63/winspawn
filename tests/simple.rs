@@ -28,7 +28,8 @@ async fn test_simple() {
         fn _open_osfhandle(_: isize, _: std::os::raw::c_int) -> std::os::raw::c_int;
         fn _dup(_: std::os::raw::c_int) -> std::os::raw::c_int;
     }
-    let h = unsafe { _open_osfhandle(r.into_raw_handle() as isize, 0) };
+    let r = into_raw_handle(r);
+    let h = unsafe { _open_osfhandle(r as isize, 0) };
     if h < 0 {
         panic!("failed to _open_osfhandle")
     }
