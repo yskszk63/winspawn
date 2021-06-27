@@ -21,17 +21,15 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 async fn test_simple() {
     pretty_env_logger::init();
 
-    let (r, w) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
+    let (rxtheir, txme) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
+    let (rxme, txtheir) = tokio_anon_pipe::anon_pipe_we_read().unwrap();
 
-    extern "C" {
-        fn _open_osfhandle(_: isize, _: std::os::raw::c_int) -> std::os::raw::c_int;
-        fn _dup(_: std::os::raw::c_int) -> std::os::raw::c_int;
-    }
-    let r = into_raw_handle(r);
-    let h = FileDescriptor::from_raw_handle(r, Mode::ReadOnly).unwrap();
-    h.dup().unwrap();
+    let rxtheir = into_raw_handle(rxtheir);
 
-    w.connect().await.unwrap();
+    let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
+    rxtheir.dup().unwrap();
+
+    txme.connect().await.unwrap();
 
     /*
     let (rxtheir, txme) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
