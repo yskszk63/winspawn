@@ -108,7 +108,7 @@ where
     log::trace!("backup {:?}.", backup);
 
     // drop non inherit flag
-    log::trace!("dup2.");
+    log::trace!("dup2. {:?} {}", fd, dest);
     let newfd = fd.dup2(dest)?;
     log::trace!("dup2 ok.");
     let result = func(&newfd);

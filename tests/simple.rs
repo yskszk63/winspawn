@@ -7,13 +7,9 @@ type HANDLE = *mut c_void;
 #[cfg(windows)]
 fn into_raw_handle<P>(p: P) -> HANDLE
 where
-    P: std::os::windows::io::AsRawHandle,
+    P: std::os::windows::io::IntoRawHandle,
 {
-    use std::mem;
-
-    let r = p.as_raw_handle();
-    mem::forget(p);
-    r
+    p.into_raw_handle()
 }
 
 #[cfg(not(windows))]
