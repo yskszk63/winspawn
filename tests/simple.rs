@@ -21,8 +21,8 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 async fn test_simple() {
     pretty_env_logger::init();
 
-    let (rxtheir, txme) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
-    let (rxme, txtheir) = tokio_anon_pipe::anon_pipe_we_read().unwrap();
+    let (rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
+    let (mut rxme, txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
     eprintln!("{:?}", rxtheir);
     eprintln!("{:?}", txtheir);
 
@@ -41,10 +41,6 @@ async fn test_simple() {
     .unwrap();
     drop(rxtheir);
     drop(txtheir);
-
-    eprintln!("connect");
-    let mut txme = txme.connect().await.unwrap();
-    let mut rxme = rxme.connect().await.unwrap();
 
     eprintln!("write");
     txme.write_all(b"Hello").await.unwrap();
