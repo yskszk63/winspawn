@@ -9,7 +9,7 @@ mod bindings {
     windows::include_bindings!();
 }
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, c_void};
 use std::io;
 use std::iter;
 use std::mem;
@@ -18,7 +18,10 @@ use std::os::raw::{c_int, c_uint};
 use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
 use std::os::windows::raw::HANDLE;
+use std::pin::Pin;
 use std::ptr;
+use std::task::{Context, Poll, Waker};
+use std::future::Future;
 
 use sys::_open_osfhandle;
 use sys::_set_invalid_parameter_handler as _set_thread_local_invalid_parameter_handler; // FIXME where _set_thread_local_invalid_parameter_handler?
@@ -28,7 +31,7 @@ use sys::{_wspawnvp, P_NOWAIT};
 
 use bindings::Windows::Win32::Foundation::HANDLE as WinHandle;
 use bindings::Windows::Win32::System::Threading::{
-    GetExitCodeProcess, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    GetExitCodeProcess, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT, RegisterWaitForSingleObject,WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
@@ -174,6 +177,39 @@ impl Child {
 
         Ok(Some(status))
     }
+}
+
+impl Future for Child {
+    type Output = io::Result<u32>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = Pin::get_mut(self);
+
+        loop {
+            if let Some(r) = this.try_wait()? {
+                return Poll::Ready(Ok(r));
+            }
+
+            let waker = cx.waker().clone();
+            let waker = Box::into_raw(Box::new(Some(waker)));
+            let wait_object = ptr::null_mut();
+            unsafe {
+                RegisterWaitForSingleObject(
+                    wait_object,
+                    this.0,
+                    Some(callback),
+                    waker as *mut _,
+                    INFINITE,
+                    WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE,
+                )
+            }.ok().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        }
+    }
+}
+
+unsafe extern "system" fn callback(ptr: *mut c_void, _: u8) {
+    let complete = &mut *(ptr as *mut Option<Waker>);
+    complete.take().unwrap().wake();
 }
 
 #[cfg(windows)]
