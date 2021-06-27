@@ -32,9 +32,6 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
-    rxtheir.dup().unwrap();
-    txtheir.dup().unwrap();
-    /*
     let mut prog = swap_fd(&rxtheir, 3, |_| {
         swap_fd(&txtheir, 4, |_| {
             eprintln!("spawn");
@@ -63,5 +60,4 @@ async fn test_simple() {
 
     let exitcode = prog.wait().unwrap();
     assert_eq!(0, exitcode);
-    */
 }

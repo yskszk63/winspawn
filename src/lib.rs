@@ -14,6 +14,7 @@ use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
 use std::os::windows::raw::HANDLE;
 use std::ptr;
+use std::mem;
 
 use sys::_cwait;
 use sys::_open_osfhandle;
@@ -102,10 +103,17 @@ where
     F: FnOnce(&FileDescriptor) -> Result<R, E>,
     E: From<io::Error>,
 {
-    log::trace!("begin swap_fd with {:?} {}.", fd, dest);
-    // backup dest if exists.
-    let backup = unsafe { FileDescriptor::from_raw_fd(dest) }.dup();
-    log::trace!("backup {:?}.", backup);
+    let backup = if fd.0 == dest {
+        None
+    } else {
+        log::trace!("begin swap_fd with {:?} {}.", fd, dest);
+        // backup dest if exists.
+        let original = unsafe { FileDescriptor::from_raw_fd(dest) };
+        let backup = original.dup();
+        mem::forget(original);
+        log::trace!("backup {:?}.", backup);
+        backup.ok()
+    };
 
     // drop non inherit flag
     log::trace!("dup. {:?}", fd);
@@ -118,7 +126,7 @@ where
     drop(newfd);
 
     // restore backup
-    if let Ok(backup) = backup {
+    if let Some(backup) = backup {
         log::trace!("restore backup");
         backup.dup2(dest)?;
     }
