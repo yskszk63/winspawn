@@ -24,10 +24,11 @@ use std::ptr;
 use std::task::{Context, Poll, Waker};
 
 use sys::_open_osfhandle;
-use sys::_set_invalid_parameter_handler as _set_thread_local_invalid_parameter_handler; // FIXME where _set_thread_local_invalid_parameter_handler?
+use sys::_set_thread_local_invalid_parameter_handler;
 use sys::wchar_t;
 use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
+use sys::{O_RDONLY, O_WRONLY};
 
 use bindings::Windows::Win32::Foundation::{HANDLE as WinHandle, INVALID_HANDLE_VALUE};
 use bindings::Windows::Win32::System::Threading::{
@@ -56,11 +57,9 @@ pub enum Mode {
 
 impl Mode {
     fn val(&self) -> c_int {
-        const O_RDONY: c_int = 0; // FIXME where??
-        const O_RDW: c_int = 1; // FIXME where??
         match self {
-            Self::ReadOnly => O_RDONY,
-            Self::ReadWrite => O_RDW,
+            Self::ReadOnly => O_RDONLY as c_int,
+            Self::ReadWrite => O_WRONLY as c_int,
         }
     }
 }
