@@ -79,6 +79,11 @@ impl FileDescriptor {
         Ok(Self(r))
     }
 
+    /// from raw fd
+    ///
+    /// # Safety
+    /// - Must valid file descriptor
+    /// - No other uses this file descriptor
     pub unsafe fn from_raw_fd(fd: c_int) -> Self {
         Self(fd)
     }
