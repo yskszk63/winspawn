@@ -28,7 +28,7 @@ use sys::{_wspawnvp, P_NOWAIT};
 
 use bindings::Windows::Win32::Foundation::HANDLE as WinHandle;
 use bindings::Windows::Win32::System::Threading::{
-    GetExitCodeProcess, WaitForSingleObject, WAIT_OBJECT_0,
+    GetExitCodeProcess, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
@@ -158,6 +158,21 @@ impl Child {
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
         Ok(status)
+    }
+
+    pub fn try_wait(&mut self) -> io::Result<Option<u32>> {
+        match unsafe { WaitForSingleObject(self.0, 0) } {
+            WAIT_OBJECT_0 => {}
+            WAIT_TIMEOUT => return Ok(None),
+            _ => return Err(io::Error::last_os_error()),
+        }
+
+        let mut status = 0;
+        unsafe { GetExitCodeProcess(self.0, &mut status) }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        Ok(Some(status))
     }
 }
 

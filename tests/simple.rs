@@ -54,6 +54,7 @@ async fn test_simple() {
     assert_eq!(b"Hello".as_ref(), &buf);
     eprintln!("OK");
 
+    prog.try_wait().unwrap();
     let exitcode = prog.wait().unwrap();
     assert_eq!(0, exitcode);
 }
