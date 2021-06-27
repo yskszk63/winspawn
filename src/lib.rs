@@ -5,6 +5,10 @@
 #[allow(improper_ctypes)]
 mod sys;
 
+mod bindings {
+    windows::include_bindings!();
+}
+
 use std::ffi::OsStr;
 use std::io;
 use std::iter;
@@ -16,12 +20,17 @@ use std::os::windows::ffi::OsStrExt;
 use std::os::windows::raw::HANDLE;
 use std::ptr;
 
-use sys::_cwait;
 use sys::_open_osfhandle;
 use sys::_set_invalid_parameter_handler as _set_thread_local_invalid_parameter_handler; // FIXME where _set_thread_local_invalid_parameter_handler?
 use sys::wchar_t;
 use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
+
+use bindings::Windows::Win32::Foundation::HANDLE as WinHandle;
+use bindings::Windows::Win32::System::Threading::{
+    GetExitCodeProcess, WaitForSingleObject, WAIT_OBJECT_0,
+};
+use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
 #[cfg(not(windows))]
 mod stub {
@@ -134,17 +143,21 @@ where
 }
 
 #[derive(Debug)]
-pub struct Child(isize);
+pub struct Child(WinHandle);
 
 impl Child {
-    pub fn wait(&mut self) -> io::Result<c_int> {
-        let mut term = c_int::default();
-        let ret = unsafe { _cwait(&mut term as *mut _, self.0, 0) };
-        if ret < 0 {
+    pub fn wait(&mut self) -> io::Result<u32> {
+        let ret = unsafe { WaitForSingleObject(self.0, INFINITE) };
+        if ret != WAIT_OBJECT_0 {
             return Err(io::Error::last_os_error());
         }
 
-        Ok(term)
+        let mut status = 0;
+        unsafe { GetExitCodeProcess(self.0, &mut status) }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        Ok(status)
     }
 }
 
@@ -174,5 +187,5 @@ where
         return Err(io::Error::last_os_error());
     }
 
-    Ok(Child(child))
+    Ok(Child(WinHandle(child)))
 }
