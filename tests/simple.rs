@@ -32,8 +32,8 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
-    let mut prog = swap_fd(&rxtheir, 3, |_| {
-        swap_fd(&txtheir, 4, |_| {
+    let mut prog = swap_fd(&txtheir, 4, |_| {
+        swap_fd(&rxtheir, 3, |_| {
             eprintln!("spawn");
             spawn("python", ["./test.py"])
         })
