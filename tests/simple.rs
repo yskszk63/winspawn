@@ -21,7 +21,6 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 async fn test_simple() {
     pretty_env_logger::init();
 
-    use std::os::windows::io::IntoRawHandle;
     let (r, w) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
 
     extern "C" {
@@ -29,14 +28,8 @@ async fn test_simple() {
         fn _dup(_: std::os::raw::c_int) -> std::os::raw::c_int;
     }
     let r = into_raw_handle(r);
-    let h = unsafe { _open_osfhandle(r as isize, 0) };
-    if h < 0 {
-        panic!("failed to _open_osfhandle")
-    }
-    let fd = unsafe { _dup(h) };
-    if fd < 0 {
-        panic!("failed to _dup")
-    }
+    let h = FileDescriptor::from_raw_handle(r, Mode::ReadOnly).unwrap();
+    h.dup().unwrap();
 
     w.connect().await.unwrap();
 
