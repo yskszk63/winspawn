@@ -23,17 +23,6 @@ async fn test_simple() {
 
     let (rxtheir, txme) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
     let (rxme, txtheir) = tokio_anon_pipe::anon_pipe_we_read().unwrap();
-
-    let rxtheir = into_raw_handle(rxtheir);
-
-    let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
-    rxtheir.dup().unwrap();
-
-    txme.connect().await.unwrap();
-
-    /*
-    let (rxtheir, txme) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
-    let (rxme, txtheir) = tokio_anon_pipe::anon_pipe_we_read().unwrap();
     eprintln!("{:?}", rxtheir);
     eprintln!("{:?}", txtheir);
 
@@ -43,6 +32,9 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
+    rxtheir.dup().unwrap();
+    txtheir.dup().unwrap();
+    /*
     let mut prog = swap_fd(&rxtheir, 3, |_| {
         swap_fd(&txtheir, 4, |_| {
             eprintln!("spawn");
