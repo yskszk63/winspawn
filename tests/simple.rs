@@ -21,6 +21,7 @@ fn into_raw_handle<P>(_: P) -> HANDLE {
 async fn test_simple() {
     pretty_env_logger::init();
 
+    use std::os::windows::io::IntoRawHandle;
     let (r, w) = tokio_anon_pipe::anon_pipe_we_write().unwrap();
 
     extern "C" {
