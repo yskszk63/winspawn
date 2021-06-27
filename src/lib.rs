@@ -202,6 +202,14 @@ impl Future for Child {
         let this = Pin::get_mut(self);
 
         loop {
+            if let Some(..) = &this.waiter {
+                if let Some(exitcode) = this.try_wait()? {
+                    return Poll::Ready(Ok(exitcode));
+                } else {
+                    return Poll::Pending;
+                }
+            }
+
             if let Some(r) = this.try_wait()? {
                 return Poll::Ready(Ok(r));
             }
