@@ -8,13 +8,13 @@ mod sys;
 use std::ffi::OsStr;
 use std::io;
 use std::iter;
+use std::mem;
 use std::os::raw::{c_int, c_uint};
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
 use std::os::windows::raw::HANDLE;
 use std::ptr;
-use std::mem;
 
 use sys::_cwait;
 use sys::_open_osfhandle;
