@@ -8,7 +8,7 @@
 //! use winspawn::{move_fd, spawn, FileDescriptor};
 //! use std::mem;
 //! use std::io;
-//! fn main() io::Result<()> {
+//! fn main() -> io::Result<()> {
 //!     let stdout = unsafe { FileDescriptor::from_raw_fd(1) };
 //!     // copy stdout(1) to 3
 //!     let proc = move_fd(&stdout, 3, |_| {
