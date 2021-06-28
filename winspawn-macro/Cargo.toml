@@ -1,9 +1,11 @@
 [package]
 name = "winspawn-macro"
 version = "0.1.0"
+authors = ["yskszk63 <yskszk63@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Proc macros for building winspawn."
+license = "MIT/Apache-2.0"
+repository = "https://github.com/yskszk63/winspawn"
 
 [dependencies]
 syn = { version = "1.0", features = ["full"] }
