@@ -176,6 +176,9 @@ where
     F: FnOnce(&FileDescriptor) -> Result<R, E>,
     E: From<io::Error>,
 {
+    // lock for modifi file descriptor
+    let _ = StaticMutex::acquire();
+
     let backup = if fd.0 == dest {
         None
     } else {
@@ -340,7 +343,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test() {
+    fn test_mutex() {
         let lock1 = StaticMutex::acquire();
         let lock2 = StaticMutex::acquire(); // reentrant
         eprintln!("{:?} {:?}", lock1, lock2);
