@@ -35,7 +35,7 @@ async fn test_simple() {
     let prog = move_fd(&rxtheir, 3, |_| {
         move_fd(&txtheir, 4, |_| {
             eprintln!("spawn");
-            spawn("python", ["./test.py"])
+            spawn("python", ["./tests/test.py"])
         })
     })
     .unwrap();
