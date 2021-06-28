@@ -1,3 +1,4 @@
+#![doc(html_root_url = "https://docs.rs/winspawn/0.1.0")]
 //! Spawn process for passing Universal CRT's file descriptor on windows.
 //!
 //! Using `_spawn` & `_dup`.
