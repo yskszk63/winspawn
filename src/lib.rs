@@ -1,3 +1,35 @@
+//! Spawn process for passing Universal CRT's file descriptor on windows.
+//!
+//! Using `_spawn` & `_dup`.
+//!
+//! # Example
+//!
+//! ```rust
+//! use winspawn::{move_fd, spawn, FileDescriptor, Mode};
+//!
+//! use std::mem;
+//! use std::io;
+//! use std::fs;
+//! use std::os::windows::io::IntoRawHandle;
+//!
+//! fn main() -> io::Result<()> {
+//!     let file = fs::File::open("Cargo.toml")?;
+//!     let handle = file.into_raw_handle();
+//!     let fd = FileDescriptor::from_raw_handle(handle, Mode::ReadOnly)?;
+//!
+//!     let mut proc = move_fd(&fd, 3, |_| {
+//!         // print fd 3 stat
+//!         spawn("python", ["-c", r#""import os; print(os.stat(3))""#])
+//!     })?;
+//!
+//!     let exit_code = proc.wait()?;
+//!     assert_eq!(0, exit_code);
+//!
+//!     Ok(())
+//! }
+//! ```
+
+// download from https://github.com/yskszk63/ucrt-bindings
 #[allow(unused)]
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
@@ -6,6 +38,7 @@
 #[allow(non_upper_case_globals)]
 mod sys;
 
+// windows-rs bindings
 mod bindings {
     windows::include_bindings!();
 }
@@ -30,17 +63,18 @@ use sys::_set_thread_local_invalid_parameter_handler;
 use sys::wchar_t;
 use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
-use sys::{O_RDONLY, O_WRONLY};
+use sys::{O_RDONLY, O_RDWR, O_WRONLY};
 
 use bindings::Windows::Win32::Foundation::{HANDLE as WinHandle, INVALID_HANDLE_VALUE};
 use bindings::Windows::Win32::System::SystemServices::RTL_SRWLOCK;
 use bindings::Windows::Win32::System::Threading::{
     AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
-    ReleaseSRWLockExclusive, UnregisterWaitEx, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT,
-    WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
+    ReleaseSRWLockExclusive, TerminateProcess, UnregisterWaitEx, WaitForSingleObject,
+    WAIT_OBJECT_0, WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
+// stub for linux. (Development use)
 #[cfg(not(windows))]
 mod stub {
     use super::*;
@@ -53,9 +87,14 @@ mod stub {
 #[cfg(not(windows))]
 use stub::*;
 
-#[derive(Debug)]
+/// Open [`FileDescriptor`] mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mode {
+    /// Read only.
     ReadOnly,
+    /// Write only
+    WriteOnly,
+    /// Read Write
     ReadWrite,
 }
 
@@ -63,17 +102,19 @@ impl Mode {
     fn val(&self) -> c_int {
         match self {
             Self::ReadOnly => O_RDONLY as c_int,
-            Self::ReadWrite => O_WRONLY as c_int,
+            Self::WriteOnly => O_WRONLY as c_int,
+            Self::ReadWrite => O_RDWR as c_int,
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+/// Windows File Descriptor (universal CRT).
+#[derive(Debug, PartialEq, Eq)]
 pub struct FileDescriptor(c_int);
 
 impl FileDescriptor {
+    /// Construct FileDescriptor from Windows File Handle.
     #[winspawn_macro::ignore_invalid_handler]
-    /// doc ok
     pub fn from_raw_handle(handle: HANDLE, mode: Mode) -> io::Result<Self> {
         let r = unsafe { _open_osfhandle(handle as isize, mode.val()) };
         if r < 0 {
@@ -82,7 +123,7 @@ impl FileDescriptor {
         Ok(Self(r))
     }
 
-    /// from raw fd
+    /// Construct FileDescriptor from raw fd.
     ///
     /// # Safety
     /// - Must valid file descriptor
@@ -91,6 +132,7 @@ impl FileDescriptor {
         Self(fd)
     }
 
+    /// Duplicate File Descriptor. (`_dup`)
     #[winspawn_macro::ignore_invalid_handler]
     pub fn dup(&self) -> io::Result<Self> {
         let ret = unsafe { _dup(self.0) };
@@ -101,6 +143,7 @@ impl FileDescriptor {
         Ok(Self(ret))
     }
 
+    /// Duplicate File Descriptor. (`_dup2`)
     #[winspawn_macro::ignore_invalid_handler]
     pub fn dup2(&self, dest: c_int) -> io::Result<Self> {
         let ret = unsafe { _dup2(self.0, dest) };
@@ -171,7 +214,10 @@ impl Drop for StaticMutex {
     }
 }
 
-pub fn swap_fd<E, R, F>(fd: &FileDescriptor, dest: c_int, func: F) -> Result<R, E>
+/// Move fd temporary and call func.
+///
+/// This function valid in this library lock acquires.
+pub fn move_fd<E, R, F>(fd: &FileDescriptor, dest: c_int, func: F) -> Result<R, E>
 where
     F: FnOnce(&FileDescriptor) -> Result<R, E>,
     E: From<io::Error>,
@@ -221,6 +267,23 @@ impl Drop for Waiter {
     }
 }
 
+/// Represent child process.
+///
+/// An instance is a Future that represents an asynchronous termination.
+///
+/// # Example
+///
+/// ```rust
+/// use std::io;
+///
+/// #[tokio::main(flavor = "current_thread")]
+/// async fn main() -> io::Result<()> {
+///     let mut proc = winspawn::spawn("cargo", ["--version"])?;
+///     let exit_code = proc.await?;
+///     assert_eq!(0, exit_code);
+///     Ok(())
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Child {
     proc_handle: WinHandle,
@@ -228,6 +291,7 @@ pub struct Child {
 }
 
 impl Child {
+    /// Synchronous wait for exit.
     pub fn wait(&mut self) -> io::Result<u32> {
         let ret = unsafe { WaitForSingleObject(self.proc_handle, INFINITE) };
         if ret != WAIT_OBJECT_0 {
@@ -242,6 +306,9 @@ impl Child {
         Ok(status)
     }
 
+    /// Try wait for exit.
+    ///
+    /// Return immediately. If the process is finished, the exit code can be acquired.
     pub fn try_wait(&mut self) -> io::Result<Option<u32>> {
         match unsafe { WaitForSingleObject(self.proc_handle, 0) } {
             WAIT_OBJECT_0 => {}
@@ -255,6 +322,26 @@ impl Child {
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
         Ok(Some(status))
+    }
+
+    /// Terminate process.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::io;
+    /// use winspawn::spawn;
+    ///
+    /// fn main() -> io::Result<()> {
+    ///     let mut proc = spawn("python", ["-c", r#"import time; time.sleep(0xFFFFFFFF)"#])?;
+    ///     proc.kill()?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn kill(&mut self) -> io::Result<()> {
+        unsafe { TerminateProcess(self.proc_handle, 1) }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 
@@ -308,6 +395,9 @@ fn enc_wstr<S: AsRef<OsStr>>(s: S) -> Vec<wchar_t> {
     s.as_ref().encode_wide().chain(iter::once(0)).collect()
 }
 
+/// call `_spawnlp`.
+///
+/// All File Descriptors that do not have the O_NOINHERIT flag will be inherited by the child process.
 pub fn spawn<P, A, AS>(program: P, args: A) -> io::Result<Child>
 where
     P: AsRef<OsStr>,
