@@ -3,9 +3,15 @@
 #[allow(non_snake_case)]
 #[allow(deref_nullptr)]
 #[allow(improper_ctypes)]
+#[allow(non_upper_case_globals)]
 mod sys;
 
-use std::ffi::OsStr;
+mod bindings {
+    windows::include_bindings!();
+}
+
+use std::ffi::{c_void, OsStr};
+use std::future::Future;
 use std::io;
 use std::iter;
 use std::mem;
@@ -14,14 +20,26 @@ use std::os::raw::{c_int, c_uint};
 use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
 use std::os::windows::raw::HANDLE;
+use std::pin::Pin;
 use std::ptr;
+use std::sync::Once;
+use std::task::{Context, Poll, Waker};
 
-use sys::_cwait;
 use sys::_open_osfhandle;
-use sys::_set_invalid_parameter_handler as _set_thread_local_invalid_parameter_handler; // FIXME where _set_thread_local_invalid_parameter_handler?
+use sys::_set_thread_local_invalid_parameter_handler;
 use sys::wchar_t;
 use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
+use sys::{O_RDONLY, O_WRONLY};
+
+use bindings::Windows::Win32::Foundation::{HANDLE as WinHandle, INVALID_HANDLE_VALUE};
+use bindings::Windows::Win32::System::SystemServices::RTL_SRWLOCK;
+use bindings::Windows::Win32::System::Threading::{
+    AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
+    ReleaseSRWLockExclusive, UnregisterWaitEx, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
+};
+use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
 #[cfg(not(windows))]
 mod stub {
@@ -43,11 +61,9 @@ pub enum Mode {
 
 impl Mode {
     fn val(&self) -> c_int {
-        const O_RDONY: c_int = 0; // FIXME where??
-        const O_RDW: c_int = 1; // FIXME where??
         match self {
-            Self::ReadOnly => O_RDONY,
-            Self::ReadWrite => O_RDW,
+            Self::ReadOnly => O_RDONLY as c_int,
+            Self::ReadWrite => O_WRONLY as c_int,
         }
     }
 }
@@ -66,6 +82,11 @@ impl FileDescriptor {
         Ok(Self(r))
     }
 
+    /// from raw fd
+    ///
+    /// # Safety
+    /// - Must valid file descriptor
+    /// - No other uses this file descriptor
     pub unsafe fn from_raw_fd(fd: c_int) -> Self {
         Self(fd)
     }
@@ -98,11 +119,66 @@ impl Drop for FileDescriptor {
     }
 }
 
+unsafe fn static_srwlock() -> *mut RTL_SRWLOCK {
+    use std::cell::UnsafeCell;
+
+    static mut SWRLOCK: UnsafeCell<RTL_SRWLOCK> = UnsafeCell::new(RTL_SRWLOCK {
+        Ptr: ptr::null_mut(),
+    });
+    static INIT_SRWLOCK: Once = Once::new();
+
+    INIT_SRWLOCK.call_once(|| unsafe {
+        InitializeSRWLock(SWRLOCK.get());
+    });
+    SWRLOCK.get()
+}
+
+#[derive(Debug)]
+struct StaticMutex(bool);
+
+thread_local!(static ENTERED: std::cell::RefCell<bool> = Default::default());
+
+impl StaticMutex {
+    fn acquire() -> Self {
+        let enter = ENTERED.with(|b| {
+            if *b.borrow() {
+                false
+            } else {
+                *b.borrow_mut() = true;
+                true
+            }
+        });
+
+        if enter {
+            unsafe {
+                AcquireSRWLockExclusive(static_srwlock());
+            }
+            Self(true)
+        } else {
+            Self(false)
+        }
+    }
+}
+
+impl Drop for StaticMutex {
+    fn drop(&mut self) {
+        if self.0 {
+            unsafe {
+                ENTERED.with(|b| *b.borrow_mut() = false);
+                ReleaseSRWLockExclusive(static_srwlock());
+            }
+        }
+    }
+}
+
 pub fn swap_fd<E, R, F>(fd: &FileDescriptor, dest: c_int, func: F) -> Result<R, E>
 where
     F: FnOnce(&FileDescriptor) -> Result<R, E>,
     E: From<io::Error>,
 {
+    // lock for modifi file descriptor
+    let _ = StaticMutex::acquire();
+
     let backup = if fd.0 == dest {
         None
     } else {
@@ -134,18 +210,97 @@ where
 }
 
 #[derive(Debug)]
-pub struct Child(isize);
+struct Waiter(WinHandle);
+
+impl Drop for Waiter {
+    fn drop(&mut self) {
+        let ret = unsafe { UnregisterWaitEx(self.0, INVALID_HANDLE_VALUE) };
+        if !ret.as_bool() {
+            log::warn!("failed to unregister wait: {}", io::Error::last_os_error());
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Child {
+    proc_handle: WinHandle,
+    waiter: Option<Waiter>,
+}
 
 impl Child {
-    pub fn wait(&mut self) -> io::Result<c_int> {
-        let mut term = c_int::default();
-        let ret = unsafe { _cwait(&mut term as *mut _, self.0, 0) };
-        if ret < 0 {
+    pub fn wait(&mut self) -> io::Result<u32> {
+        let ret = unsafe { WaitForSingleObject(self.proc_handle, INFINITE) };
+        if ret != WAIT_OBJECT_0 {
             return Err(io::Error::last_os_error());
         }
 
-        Ok(term)
+        let mut status = 0;
+        unsafe { GetExitCodeProcess(self.proc_handle, &mut status) }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        Ok(status)
     }
+
+    pub fn try_wait(&mut self) -> io::Result<Option<u32>> {
+        match unsafe { WaitForSingleObject(self.proc_handle, 0) } {
+            WAIT_OBJECT_0 => {}
+            WAIT_TIMEOUT => return Ok(None),
+            _ => return Err(io::Error::last_os_error()),
+        }
+
+        let mut status = 0;
+        unsafe { GetExitCodeProcess(self.proc_handle, &mut status) }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        Ok(Some(status))
+    }
+}
+
+impl Future for Child {
+    type Output = io::Result<u32>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = Pin::get_mut(self);
+
+        loop {
+            if let Some(..) = &this.waiter {
+                if let Some(exitcode) = this.try_wait()? {
+                    return Poll::Ready(Ok(exitcode));
+                } else {
+                    return Poll::Pending;
+                }
+            }
+
+            if let Some(r) = this.try_wait()? {
+                return Poll::Ready(Ok(r));
+            }
+
+            let waker = cx.waker().clone();
+            let waker = Box::into_raw(Box::new(Some(waker)));
+            let mut wait_object = WinHandle::default();
+            unsafe {
+                RegisterWaitForSingleObject(
+                    &mut wait_object as *mut _,
+                    this.proc_handle,
+                    Some(callback),
+                    waker as *mut _,
+                    INFINITE,
+                    WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE,
+                )
+            }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+            this.waiter = Some(Waiter(wait_object));
+        }
+    }
+}
+
+unsafe extern "system" fn callback(ptr: *mut c_void, _: u8) {
+    let mut waker = Box::from_raw(ptr as *mut Option<Waker>);
+    waker.take().unwrap().wake();
 }
 
 #[cfg(windows)]
@@ -159,9 +314,12 @@ where
     A: IntoIterator<Item = AS>,
     AS: AsRef<OsStr>,
 {
-    let program = enc_wstr(program.as_ref()).as_ptr();
+    let program = enc_wstr(program.as_ref());
+    log::trace!("prog: {:x?}", program);
+    let program = program.as_ptr();
 
     let args = args.into_iter().map(enc_wstr).collect::<Vec<_>>();
+    log::trace!("args: {:x?}", args);
     let args = args.iter().map(Vec::as_ptr).collect::<Vec<_>>();
 
     let args = iter::once(program)
@@ -174,5 +332,20 @@ where
         return Err(io::Error::last_os_error());
     }
 
-    Ok(Child(child))
+    Ok(Child {
+        proc_handle: WinHandle(child),
+        waiter: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mutex() {
+        let lock1 = StaticMutex::acquire();
+        let lock2 = StaticMutex::acquire(); // reentrant
+        eprintln!("{:?} {:?}", lock1, lock2);
+    }
 }

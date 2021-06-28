@@ -32,7 +32,7 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
-    let mut prog = swap_fd(&rxtheir, 3, |_| {
+    let prog = swap_fd(&rxtheir, 3, |_| {
         swap_fd(&txtheir, 4, |_| {
             eprintln!("spawn");
             spawn("python", ["./test.py"])
@@ -41,6 +41,9 @@ async fn test_simple() {
     .unwrap();
     drop(rxtheir);
     drop(txtheir);
+
+    // poll process exit
+    let task = tokio::spawn(prog);
 
     eprintln!("write");
     txme.write_all(b"Hello").await.unwrap();
@@ -54,6 +57,6 @@ async fn test_simple() {
     assert_eq!(b"Hello".as_ref(), &buf);
     eprintln!("OK");
 
-    let exitcode = prog.wait().unwrap();
+    let exitcode = task.await.unwrap().unwrap();
     assert_eq!(0, exitcode);
 }
