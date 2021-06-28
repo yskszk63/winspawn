@@ -275,7 +275,7 @@ impl Drop for Waiter {
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// async fn main() -> io::Result<()> {
-///     let mut proc = winspawn::spawn("cargo", ["--version"]);
+///     let mut proc = winspawn::spawn("cargo", ["--version"])?;
 ///     let exit_code = proc.await?;
 ///     assert_eq!(0, exit_code);
 ///     Ok(())
