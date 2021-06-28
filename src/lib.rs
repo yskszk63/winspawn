@@ -13,7 +13,7 @@
 //!     // copy stdout(1) to 3
 //!     let mut proc = move_fd(&stdout, 3, |_| {
 //!         // print fd 3 stat
-//!         spawn("python", ["-c", "import os; print(os.stat(3))"])
+//!         spawn("python", ["-c", r#""import os; print(os.stat(3))""#])
 //!     })?;
 //!     mem::forget(stdout); // suppress close on drop.
 //!
@@ -266,6 +266,19 @@ impl Drop for Waiter {
 ///
 /// An instance is a Future that represents an asynchronous termination.
 ///
+/// # Example
+///
+/// ```rust
+/// use std::io;
+///
+/// #[tokio::main(flavor = "current_thread")]
+/// async fn main() -> io::Result<()> {
+///     let mut proc = spawn("cargo", ["--version"])
+///     let exit_code = proc.await?;
+///     assert_eq!(0, exit_code);
+///     Ok(())
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Child {
     proc_handle: WinHandle,

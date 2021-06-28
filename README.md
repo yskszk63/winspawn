@@ -15,7 +15,7 @@ fn main() -> io::Result<()> {
     // copy stdout(1) to 3
     let mut proc = move_fd(&stdout, 3, |_| {
         // print fd 3 stat
-        spawn("python", ["-c", "import os; print(os.stat(3))"])
+        spawn("python", ["-c", r#""import os; print(os.stat(3))""#])
     })?;
     mem::forget(stdout); // suppress close on drop.
 
