@@ -5,7 +5,10 @@ fn main() {
             WaitForSingleObject,
             GetExitCodeProcess,
             RegisterWaitForSingleObject,
-            UnregisterWaitEx
+            UnregisterWaitEx,
+            InitializeSRWLock,
+            AcquireSRWLockExclusive,
+            ReleaseSRWLockExclusive,
         },
         Windows::Win32::System::WindowsProgramming::INFINITE,
     };

@@ -22,6 +22,7 @@ use std::os::windows::ffi::OsStrExt;
 use std::os::windows::raw::HANDLE;
 use std::pin::Pin;
 use std::ptr;
+use std::sync::Once;
 use std::task::{Context, Poll, Waker};
 
 use sys::_open_osfhandle;
@@ -32,9 +33,11 @@ use sys::{_wspawnvp, P_NOWAIT};
 use sys::{O_RDONLY, O_WRONLY};
 
 use bindings::Windows::Win32::Foundation::{HANDLE as WinHandle, INVALID_HANDLE_VALUE};
+use bindings::Windows::Win32::System::SystemServices::RTL_SRWLOCK;
 use bindings::Windows::Win32::System::Threading::{
-    GetExitCodeProcess, RegisterWaitForSingleObject, UnregisterWaitEx, WaitForSingleObject,
-    WAIT_OBJECT_0, WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
+    AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
+    ReleaseSRWLockExclusive, UnregisterWaitEx, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
@@ -113,6 +116,58 @@ impl Drop for FileDescriptor {
     #[winspawn_macro::ignore_invalid_handler]
     fn drop(&mut self) {
         unsafe { _close(self.0) };
+    }
+}
+
+unsafe fn static_srwlock() -> *mut RTL_SRWLOCK {
+    use std::cell::UnsafeCell;
+
+    static mut SWRLOCK: UnsafeCell<RTL_SRWLOCK> = UnsafeCell::new(RTL_SRWLOCK {
+        Ptr: ptr::null_mut(),
+    });
+    static INIT_SRWLOCK: Once = Once::new();
+
+    INIT_SRWLOCK.call_once(|| unsafe {
+        InitializeSRWLock(SWRLOCK.get());
+    });
+    SWRLOCK.get()
+}
+
+#[derive(Debug)]
+struct StaticMutex(bool);
+
+thread_local!(static ENTERED: std::cell::RefCell<bool> = Default::default());
+
+impl StaticMutex {
+    fn acquire() -> Self {
+        let enter = ENTERED.with(|b| {
+            if *b.borrow() {
+                false
+            } else {
+                *b.borrow_mut() = true;
+                true
+            }
+        });
+
+        if enter {
+            unsafe {
+                AcquireSRWLockExclusive(static_srwlock());
+            }
+            Self(true)
+        } else {
+            Self(false)
+        }
+    }
+}
+
+impl Drop for StaticMutex {
+    fn drop(&mut self) {
+        if self.0 {
+            unsafe {
+                ENTERED.with(|b| *b.borrow_mut() = false);
+                ReleaseSRWLockExclusive(static_srwlock());
+            }
+        }
     }
 }
 
@@ -278,4 +333,16 @@ where
         proc_handle: WinHandle(child),
         waiter: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let lock1 = StaticMutex::acquire();
+        let lock2 = StaticMutex::acquire(); // reentrant
+        eprintln!("{:?} {:?}", lock1, lock2);
+    }
 }
