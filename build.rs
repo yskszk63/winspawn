@@ -9,6 +9,7 @@ fn main() {
             InitializeSRWLock,
             AcquireSRWLockExclusive,
             ReleaseSRWLockExclusive,
+            TerminateProcess,
         },
         Windows::Win32::System::WindowsProgramming::INFINITE,
     };

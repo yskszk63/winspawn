@@ -6,14 +6,17 @@
 //!
 //! ```rust
 //! use winspawn::{move_fd, spawn, FileDescriptor, Mode};
+//!
 //! use std::mem;
 //! use std::io;
 //! use std::fs;
 //! use std::os::windows::io::IntoRawHandle;
+//!
 //! fn main() -> io::Result<()> {
 //!     let file = fs::File::open("Cargo.toml")?;
 //!     let handle = file.into_raw_handle();
 //!     let fd = FileDescriptor::from_raw_handle(handle, Mode::ReadOnly)?;
+//!
 //!     let mut proc = move_fd(&fd, 3, |_| {
 //!         // print fd 3 stat
 //!         spawn("python", ["-c", r#""import os; print(os.stat(3))""#])
@@ -66,8 +69,8 @@ use bindings::Windows::Win32::Foundation::{HANDLE as WinHandle, INVALID_HANDLE_V
 use bindings::Windows::Win32::System::SystemServices::RTL_SRWLOCK;
 use bindings::Windows::Win32::System::Threading::{
     AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
-    ReleaseSRWLockExclusive, UnregisterWaitEx, WaitForSingleObject, WAIT_OBJECT_0, WAIT_TIMEOUT,
-    WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
+    ReleaseSRWLockExclusive, TerminateProcess, UnregisterWaitEx, WaitForSingleObject,
+    WAIT_OBJECT_0, WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
 
@@ -319,6 +322,26 @@ impl Child {
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
         Ok(Some(status))
+    }
+
+    /// Terminate process.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::io;
+    /// use winspawn::spawn;
+    ///
+    /// fn main() -> io::Result<()> {
+    ///     let mut proc = spawn("python", ["-c", r#"import time; time.sleep(0xFFFFFFFF)"#])?;
+    ///     proc.kill()?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn kill(&mut self) -> io::Result<()> {
+        unsafe { TerminateProcess(self.proc_handle, 1) }
+            .ok()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
     }
 }
 
