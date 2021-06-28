@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use winspawn::{spawn, swap_fd, FileDescriptor, Mode};
+use winspawn::{move_fd, spawn, FileDescriptor, Mode};
 
 type HANDLE = *mut c_void;
 
@@ -32,8 +32,8 @@ async fn test_simple() {
     let rxtheir = FileDescriptor::from_raw_handle(rxtheir, Mode::ReadOnly).unwrap();
     let txtheir = FileDescriptor::from_raw_handle(txtheir, Mode::ReadWrite).unwrap();
 
-    let prog = swap_fd(&rxtheir, 3, |_| {
-        swap_fd(&txtheir, 4, |_| {
+    let prog = move_fd(&rxtheir, 3, |_| {
+        move_fd(&txtheir, 4, |_| {
             eprintln!("spawn");
             spawn("python", ["./test.py"])
         })
