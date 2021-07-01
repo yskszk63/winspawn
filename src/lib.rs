@@ -15,8 +15,7 @@
 //!
 //! fn main() -> io::Result<()> {
 //!     let file = fs::File::open("Cargo.toml")?;
-//!     let handle = file.into_raw_handle();
-//!     let fd = FileDescriptor::from_raw_handle(handle, Mode::ReadOnly)?;
+//!     let fd = FileDescriptor::from_raw_handle(file, Mode::ReadOnly)?;
 //!
 //!     let mut proc = move_fd(&fd, 3, |_| {
 //!         // print fd 3 stat
