@@ -2,7 +2,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use winspawn::{move_fd, spawn, FileDescriptor, Mode};
 
 #[tokio::test]
-async fn test_simple() {
+async fn test_twice() {
+    proc().await;
+    proc().await;
+}
+
+async fn proc() {
     pretty_env_logger::init();
 
     let (rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
