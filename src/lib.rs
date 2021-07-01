@@ -220,13 +220,14 @@ where
     F: FnOnce(&FileDescriptor) -> Result<R, E>,
     E: From<io::Error>,
 {
+    log::trace!("begin move_fd with {:?} {}.", fd, dest);
+
     // lock for modifi file descriptor
     let _ = StaticMutex::acquire();
 
     let backup = if fd.0 == dest {
         None
     } else {
-        log::trace!("begin move_fd with {:?} {}.", fd, dest);
         // backup dest if exists.
         let original = unsafe { FileDescriptor::from_raw_fd(dest) };
         let backup = original.dup();
@@ -248,7 +249,8 @@ where
     // restore backup
     if let Some(backup) = backup {
         log::trace!("restore backup");
-        backup.dup2(dest)?;
+        let restored = backup.dup2(dest)?;
+        mem::forget(restored);
     }
     result
 }
