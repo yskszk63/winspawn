@@ -3,13 +3,13 @@ use winspawn::{move_fd, spawn, FileDescriptor, Mode};
 
 #[tokio::test]
 async fn test_twice() {
+    pretty_env_logger::init();
+
     proc().await;
     proc().await;
 }
 
 async fn proc() {
-    pretty_env_logger::init();
-
     let (rxtheir, mut txme) = tokio_anon_pipe::anon_pipe().await.unwrap();
     let (mut rxme, txtheir) = tokio_anon_pipe::anon_pipe().await.unwrap();
     eprintln!("{:?}", rxtheir);
