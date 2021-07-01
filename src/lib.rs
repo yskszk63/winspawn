@@ -103,7 +103,10 @@ pub struct FileDescriptor(c_int);
 impl FileDescriptor {
     /// Construct FileDescriptor from Windows File Handle.
     #[winspawn_macro::ignore_invalid_handler]
-    pub fn from_raw_handle<H>(handle: H, mode: Mode) -> io::Result<Self> where H: IntoRawHandle {
+    pub fn from_raw_handle<H>(handle: H, mode: Mode) -> io::Result<Self>
+    where
+        H: IntoRawHandle,
+    {
         let handle = handle.into_raw_handle();
         let r = unsafe { _open_osfhandle(handle as isize, mode.val()) };
         if r < 0 {
