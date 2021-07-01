@@ -15,8 +15,7 @@
 //!
 //! fn main() -> io::Result<()> {
 //!     let file = fs::File::open("Cargo.toml")?;
-//!     let handle = file.into_raw_handle();
-//!     let fd = FileDescriptor::from_raw_handle(handle, Mode::ReadOnly)?;
+//!     let fd = FileDescriptor::from_raw_handle(file, Mode::ReadOnly)?;
 //!
 //!     let mut proc = move_fd(&fd, 3, |_| {
 //!         // print fd 3 stat
@@ -53,7 +52,7 @@ use std::os::raw::{c_int, c_uint};
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 #[cfg(windows)]
-use std::os::windows::raw::HANDLE;
+use std::os::windows::io::IntoRawHandle;
 use std::pin::Pin;
 use std::ptr;
 use std::sync::Once;
@@ -66,7 +65,7 @@ use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
 use sys::{O_RDONLY, O_RDWR, O_WRONLY};
 
-use bindings::Windows::Win32::Foundation::{HANDLE as WinHandle, INVALID_HANDLE_VALUE};
+use bindings::Windows::Win32::Foundation::{HANDLE, INVALID_HANDLE_VALUE};
 use bindings::Windows::Win32::System::SystemServices::RTL_SRWLOCK;
 use bindings::Windows::Win32::System::Threading::{
     AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
@@ -74,19 +73,6 @@ use bindings::Windows::Win32::System::Threading::{
     WAIT_OBJECT_0, WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
 };
 use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
-
-// stub for linux. (Development use)
-#[cfg(not(windows))]
-mod stub {
-    use super::*;
-
-    pub type HANDLE = *mut std::ffi::c_void;
-    pub(super) fn enc_wstr<S: AsRef<OsStr>>(_: S) -> Vec<wchar_t> {
-        panic!("stub")
-    }
-}
-#[cfg(not(windows))]
-use stub::*;
 
 /// Open [`FileDescriptor`] mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -116,7 +102,11 @@ pub struct FileDescriptor(c_int);
 impl FileDescriptor {
     /// Construct FileDescriptor from Windows File Handle.
     #[winspawn_macro::ignore_invalid_handler]
-    pub fn from_raw_handle(handle: HANDLE, mode: Mode) -> io::Result<Self> {
+    pub fn from_raw_handle<H>(handle: H, mode: Mode) -> io::Result<Self>
+    where
+        H: IntoRawHandle,
+    {
+        let handle = handle.into_raw_handle();
         let r = unsafe { _open_osfhandle(handle as isize, mode.val()) };
         if r < 0 {
             return Err(io::Error::last_os_error());
@@ -131,6 +121,13 @@ impl FileDescriptor {
     /// - No other uses this file descriptor
     pub unsafe fn from_raw_fd(fd: c_int) -> Self {
         Self(fd)
+    }
+
+    /// Into raw file descriptor.
+    pub fn into_raw_fd(self) -> c_int {
+        let r = self.0;
+        mem::forget(self);
+        r
     }
 
     /// Duplicate File Descriptor. (`_dup`)
@@ -223,13 +220,14 @@ where
     F: FnOnce(&FileDescriptor) -> Result<R, E>,
     E: From<io::Error>,
 {
+    log::trace!("begin move_fd with {:?} {}.", fd, dest);
+
     // lock for modifi file descriptor
     let _ = StaticMutex::acquire();
 
     let backup = if fd.0 == dest {
         None
     } else {
-        log::trace!("begin swap_fd with {:?} {}.", fd, dest);
         // backup dest if exists.
         let original = unsafe { FileDescriptor::from_raw_fd(dest) };
         let backup = original.dup();
@@ -251,13 +249,14 @@ where
     // restore backup
     if let Some(backup) = backup {
         log::trace!("restore backup");
-        backup.dup2(dest)?;
+        let restored = backup.dup2(dest)?;
+        mem::forget(restored);
     }
     result
 }
 
 #[derive(Debug)]
-struct Waiter(WinHandle);
+struct Waiter(HANDLE);
 
 impl Drop for Waiter {
     fn drop(&mut self) {
@@ -287,7 +286,7 @@ impl Drop for Waiter {
 /// ```
 #[derive(Debug)]
 pub struct Child {
-    proc_handle: WinHandle,
+    proc_handle: HANDLE,
     waiter: Option<Waiter>,
 }
 
@@ -367,7 +366,7 @@ impl Future for Child {
 
             let waker = cx.waker().clone();
             let waker = Box::into_raw(Box::new(Some(waker)));
-            let mut wait_object = WinHandle::default();
+            let mut wait_object = HANDLE::default();
             unsafe {
                 RegisterWaitForSingleObject(
                     &mut wait_object as *mut _,
@@ -424,7 +423,7 @@ where
     }
 
     Ok(Child {
-        proc_handle: WinHandle(child),
+        proc_handle: HANDLE(child),
         waiter: None,
     })
 }

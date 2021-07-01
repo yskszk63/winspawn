@@ -32,7 +32,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --workspace -- --nocapture
+        args: --workspace --color=always -- --nocapture
       env:
         RUST_LOG: trace
         RUST_BACKTRACE: '1'
