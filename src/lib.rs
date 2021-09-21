@@ -65,7 +65,7 @@ use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
 use sys::{O_RDONLY, O_RDWR, O_WRONLY};
 
-use bindings::Windows::Win32::Foundation::{HANDLE, INVALID_HANDLE_VALUE, BOOLEAN};
+use bindings::Windows::Win32::Foundation::{BOOLEAN, HANDLE, INVALID_HANDLE_VALUE};
 use bindings::Windows::Win32::System::SystemServices::RTL_SRWLOCK;
 use bindings::Windows::Win32::System::Threading::{
     AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
