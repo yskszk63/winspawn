@@ -360,13 +360,13 @@ impl Future for Child {
 
             let waker = cx.waker().clone();
             let waker = Box::into_raw(Box::new(Some(waker)));
-            let wait_object = HANDLE::default();
+            let mut wait_object = HANDLE::default();
             unsafe {
                 RegisterWaitForSingleObject(
-                    Some(wait_object as *const _),
+                    wait_object as *mut _,
                     this.proc_handle,
                     Some(callback),
-                    waker as *mut _,
+                    Some(waker as *const _),
                     INFINITE,
                     WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE,
                 )
