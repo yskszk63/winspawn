@@ -60,19 +60,11 @@ use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
 use sys::{O_RDONLY, O_RDWR, O_WRONLY};
 
-use windows::Win32::Foundation::{HANDLE, BOOLEAN, INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
+use windows::Win32::Foundation::{BOOLEAN, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
 use windows::Win32::System::Threading::{
-    WaitForSingleObject,
-    GetExitCodeProcess,
-    RegisterWaitForSingleObject,
-    UnregisterWaitEx,
-    InitializeSRWLock,
-    AcquireSRWLockExclusive,
-    ReleaseSRWLockExclusive,
-    TerminateProcess,
-    WT_EXECUTEONLYONCE,
-    WT_EXECUTEINWAITTHREAD,
-    RTL_SRWLOCK,
+    AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
+    ReleaseSRWLockExclusive, TerminateProcess, UnregisterWaitEx, WaitForSingleObject, RTL_SRWLOCK,
+    WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
 };
 use windows::Win32::System::WindowsProgramming::INFINITE;
 
