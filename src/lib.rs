@@ -38,11 +38,6 @@
 #[allow(non_upper_case_globals)]
 mod sys;
 
-// windows-rs bindings
-mod bindings {
-    windows::include_bindings!();
-}
-
 use std::ffi::{c_void, OsStr};
 use std::future::Future;
 use std::io;
@@ -65,14 +60,21 @@ use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
 use sys::{O_RDONLY, O_RDWR, O_WRONLY};
 
-use bindings::Windows::Win32::Foundation::{BOOLEAN, HANDLE, INVALID_HANDLE_VALUE};
-use bindings::Windows::Win32::System::SystemServices::RTL_SRWLOCK;
-use bindings::Windows::Win32::System::Threading::{
-    AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
-    ReleaseSRWLockExclusive, TerminateProcess, UnregisterWaitEx, WaitForSingleObject,
-    WAIT_OBJECT_0, WAIT_TIMEOUT, WT_EXECUTEINWAITTHREAD, WT_EXECUTEONLYONCE,
+use windows::Win32::Foundation::{HANDLE, BOOLEAN, INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
+use windows::Win32::System::Threading::{
+    WaitForSingleObject,
+    GetExitCodeProcess,
+    RegisterWaitForSingleObject,
+    UnregisterWaitEx,
+    InitializeSRWLock,
+    AcquireSRWLockExclusive,
+    ReleaseSRWLockExclusive,
+    TerminateProcess,
+    WT_EXECUTEONLYONCE,
+    WT_EXECUTEINWAITTHREAD,
+    RTL_SRWLOCK,
 };
-use bindings::Windows::Win32::System::WindowsProgramming::INFINITE;
+use windows::Win32::System::WindowsProgramming::INFINITE;
 
 /// Open [`FileDescriptor`] mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
