@@ -60,7 +60,9 @@ use sys::{_close, _dup, _dup2};
 use sys::{_wspawnvp, P_NOWAIT};
 use sys::{O_RDONLY, O_RDWR, O_WRONLY};
 
-use windows::Win32::Foundation::{BOOLEAN, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
+use windows::Win32::Foundation::{
+    BOOLEAN, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
 use windows::Win32::System::Threading::{
     AcquireSRWLockExclusive, GetExitCodeProcess, InitializeSRWLock, RegisterWaitForSingleObject,
     ReleaseSRWLockExclusive, TerminateProcess, UnregisterWaitEx, WaitForSingleObject, RTL_SRWLOCK,
