@@ -363,7 +363,7 @@ impl Future for Child {
             let mut wait_object = HANDLE::default();
             unsafe {
                 RegisterWaitForSingleObject(
-                    wait_object as *mut _,
+                    &wait_object as *mut _,
                     this.proc_handle,
                     Some(callback),
                     Some(waker as *const _),
