@@ -21,8 +21,6 @@ jobs:
         profile: minimal
         components: rustfmt, clippy
 
-    - run: cargo generate-lockfile
-
     - uses: actions/cache@v3
       with:
         path: |
@@ -31,7 +29,7 @@ jobs:
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
           target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }} # TODO fixme use lockfile
         restore-keys: |
           ${{ runner.os }}-cargo-
 
