@@ -360,10 +360,10 @@ impl Future for Child {
 
             let waker = cx.waker().clone();
             let waker = Box::into_raw(Box::new(Some(waker)));
-            let mut wait_object = HANDLE::default();
+            let wait_object = HANDLE::default();
             unsafe {
                 RegisterWaitForSingleObject(
-                    &mut wait_object as *mut _,
+                    Some(wait_object as *const _),
                     this.proc_handle,
                     Some(callback),
                     waker as *mut _,
