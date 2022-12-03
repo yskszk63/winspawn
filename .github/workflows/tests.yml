@@ -22,7 +22,7 @@ jobs:
         profile: minimal
         components: rustfmt, clippy
 
-    - run: cargo cargo-generate-lockfile
+    - run: cargo generate-lockfile
 
     - uses: actions/cache@v3
       with:
