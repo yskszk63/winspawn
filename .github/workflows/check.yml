@@ -21,6 +21,22 @@ jobs:
         profile: minimal
         components: rustfmt, clippy
 
+    - run: cargo cargo-generate-lockfile
+
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - run: cargo build
+
     - name: Annotate commit with clippy warnings
       uses: actions-rs/clippy-check@v1
       with:
